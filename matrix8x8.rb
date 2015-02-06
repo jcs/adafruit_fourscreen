@@ -1,6 +1,5 @@
 #!/usr/bin/env ruby
 #
-# Copyright (c) 2015, joshua stein <jcs@jcs.org>
 # Copyright (c) 2012, Sungjin Han <meinside@gmail.com> (Matrix8x8)
 # All rights reserved.
 #
