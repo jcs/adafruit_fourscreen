@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
-require "./matrix8x8"
+require_relative "matrix8x8"
+require_relative "font3x5"
 
 class FourScreen
   SC_ADDR_1 = 0x74
@@ -10,8 +11,8 @@ class FourScreen
 
   SC_ADDRS = [ SC_ADDR_4, SC_ADDR_3, SC_ADDR_2, SC_ADDR_1 ]
 
-  WIDTH = 8
-  HEIGHT = 8
+  SC_WIDTH = 8
+  SC_HEIGHT = 8
 
   OFF = 0
   GREEN = 1
@@ -21,20 +22,28 @@ class FourScreen
   attr_accessor :screens, :matrix
 
   def initialize
-    @matrix = HEIGHT.times.map{ Array.new(WIDTH * SC_ADDRS.count, OFF) }
-
     @screens = SC_ADDRS.map{|addr|
-      screen = Matrix8x8.new(Matrix8x8.i2c_device_path, addr)
-      screen.clear
-      screen
+      Matrix8x8.new(Matrix8x8.i2c_device_path, addr)
     }
 
+    clear(true)
     read
+  end
+
+  def set_brightness(level)
+    @screens.each{|s| s.set_brightness(level) }
+  end
+
+  def clear(screen = false)
+    if screen
+      @screens.each{|s| s.clear }
+    end
+    @matrix = SC_HEIGHT.times.map{ Array.new(SC_WIDTH * SC_ADDRS.count, OFF) }
   end
 
   def read
     @screens.each_with_index do |screen,x|
-      WIDTH.times do |row|
+      SC_WIDTH.times do |row|
         vals = screen.read(row)
 
         # 20 -> "10100" -> [ 1, 0, 1, 0, 0 ]
@@ -42,17 +51,17 @@ class FourScreen
         bits2 = vals[1].to_s(2).split("").map{|i| i.to_i }
 
         # [ 1, 0, 1, 0, 0 ] -> [ 0, 0, 0, 0, 0, 1, 0, 1 ]
-        while bits.length < WIDTH
+        while bits.length < SC_WIDTH
           bits.unshift 0
         end
-        while bits2.length < WIDTH
+        while bits2.length < SC_WIDTH
           bits2.unshift 0
         end
         bits.reverse!
         bits2.reverse!
 
-        actual_row = (x * WIDTH) + (WIDTH - row) - 1
-        WIDTH.times do |y|
+        actual_row = (x * SC_WIDTH) + (SC_WIDTH - row) - 1
+        SC_WIDTH.times do |y|
           if bits[y] == 1 && bits2[y] == 1
             v = YELLOW
           elsif bits[y] == 1 && bits2[y] == 0
@@ -103,11 +112,11 @@ class FourScreen
 
   def write
     @screens.each_with_index do |screen,x|
-      WIDTH.times do |col|
+      SC_WIDTH.times do |col|
         val = ""
         val2 = ""
-        HEIGHT.times do |row|
-          case @matrix[row][col + (x * WIDTH)]
+        SC_HEIGHT.times do |row|
+          case @matrix[row][col + (x * SC_WIDTH)]
           when OFF
             val << "0"
             val2 << "0"
@@ -127,10 +136,35 @@ class FourScreen
         val = val.reverse.to_i(2)
         val2 = val2.reverse.to_i(2)
 
-        row = WIDTH - col - 1
+        row = SC_WIDTH - col - 1
 
         screen.write(row, val, val2)
       end
     end
+  end
+
+  def draw_word(x, text, color)
+    text.to_s.each_char do |char|
+      col_size = 0
+
+      Font3x5::CHARS[char.ord].each_with_index do |cbits,row|
+        cbits.each_with_index do |bit,col|
+          self.set(x + col, row + 1, bit == 1 ? color : 0)
+          col_size = col
+        end
+      end
+
+      x += col_size + 2
+    end
+
+    x
+  end
+
+  def height
+    SC_HEIGHT
+  end
+
+  def width
+    SC_WIDTH * @screens.count
   end
 end
